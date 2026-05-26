@@ -212,6 +212,24 @@ canvas {
   backdrop-filter: blur(10px);
 }
 
+.first-person.live-camera-mode #firstPersonScene {
+  visibility: hidden;
+}
+
+.first-person.live-camera-mode .camera-panel {
+  inset: 0;
+  width: auto;
+  border: 0;
+  border-radius: 0;
+  background: #050707;
+  z-index: 1;
+}
+
+.first-person.live-camera-mode .top-bar,
+.first-person.live-camera-mode .status-strip {
+  z-index: 3;
+}
+
 .camera-panel[hidden] {
   display: none;
 }
@@ -225,6 +243,13 @@ canvas {
   object-fit: cover;
 }
 
+.first-person.live-camera-mode .camera-panel video,
+.first-person.live-camera-mode .camera-panel img {
+  height: 100%;
+  aspect-ratio: auto;
+  object-fit: contain;
+}
+
 .camera-panel img[hidden] {
   display: none;
 }
@@ -234,6 +259,19 @@ canvas {
   color: #c8d0ce;
   font-size: 12px;
   line-height: 1.35;
+}
+
+.first-person.live-camera-mode #cameraStatus {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 64px;
+  width: fit-content;
+  max-width: calc(100% - 32px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  background: rgba(17, 19, 21, 0.78);
+  backdrop-filter: blur(10px);
 }
 
 .metrics div {

@@ -1,6 +1,7 @@
 import * as THREE from "https://unpkg.com/three@0.165.0/build/three.module.js";
 
 const fpCanvas = document.querySelector("#firstPersonScene");
+const firstPersonViewport = document.querySelector(".first-person");
 const overviewCanvas = document.querySelector("#overviewScene");
 const loadStatus = document.querySelector("#loadStatus");
 const motionStatus = document.querySelector("#motionStatus");
@@ -422,7 +423,7 @@ function clearRunLogs() {
 }
 
 function updateSourceControls() {
-  sourceToggle.textContent = captureSource === "realsense" ? "Source: RealSense" : "Source: 3D scene";
+  sourceToggle.textContent = captureSource === "realsense" ? "3D scene" : "Live camera";
   runButton.textContent = "Capture";
   runButton.disabled = !localizationEnabled;
 }
@@ -549,6 +550,15 @@ function stopRealSenseLive(reason = "D435i live stream stopped.") {
   if (reason) setCameraStatus(reason, true);
 }
 
+function setLeftViewMode(mode) {
+  const showCamera = mode === "camera";
+  firstPersonViewport.classList.toggle("live-camera-mode", showCamera);
+  fpCanvas.setAttribute("aria-hidden", showCamera ? "true" : "false");
+  cameraPanel.hidden = !showCamera;
+  cameraVideo.hidden = true;
+  realsenseStreamImage.hidden = !showCamera;
+}
+
 async function startCamera() {
   if (cameraStream) return;
   stopRealSenseLive("Stopped D435i live stream so the browser camera can own the preview.");
@@ -651,10 +661,10 @@ function toggleRealSenseLive() {
 function showSyntheticSource() {
   stopBrowserCamera();
   stopRealSenseLive();
-  cameraPanel.hidden = true;
+  setLeftViewMode("scene");
   captureSource = "synthetic";
   updateSourceControls();
-  setRunStatus("Source set to 3D scene snapshot.", true);
+  setRunStatus("Left view set to controllable 3D scene.", true);
 }
 
 function showRealSenseSource() {
@@ -664,8 +674,9 @@ function showRealSenseSource() {
   }
   captureSource = "realsense";
   updateSourceControls();
+  setLeftViewMode("camera");
   if (!realsenseLiveRunning) toggleRealSenseLive();
-  setRunStatus("Source set to RealSense camera.", true);
+  setRunStatus("Left view set to live RealSense camera.", true);
 }
 
 function toggleCaptureSource() {
