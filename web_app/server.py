@@ -71,6 +71,8 @@ _realsense_state: dict[str, Any] = {"pipeline": None, "last_started": 0.0}
 _realsense_capture_lock = threading.Lock()
 _realsense_stream_lock = threading.Lock()
 _realsense_release_lock = threading.Lock()
+_realsense_live_lock = threading.Lock()
+_realsense_live_proc: subprocess.Popen[bytes] | None = None
 
 
 @app.get("/")
@@ -404,6 +406,75 @@ def _open_realsense_python_mjpeg_stream():
     return stream_chunks()
 
 
+def _stop_realsense_live_process() -> None:
+    global _realsense_live_proc
+    proc = _realsense_live_proc
+    _realsense_live_proc = None
+    if proc is None:
+        return
+    if proc.poll() is not None:
+        return
+    proc.terminate()
+    try:
+        proc.wait(timeout=2.0)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.wait(timeout=2.0)
+
+
+def _start_realsense_live_process(restart: bool = False) -> dict[str, Any]:
+    global _realsense_live_proc
+    if not REALSENSE_PYTHON.exists():
+        raise HTTPException(status_code=503, detail=f"RealSense Python venv missing: {REALSENSE_PYTHON}")
+    if not REALSENSE_MJPEG_HELPER.exists():
+        raise HTTPException(status_code=503, detail=f"RealSense MJPEG helper missing: {REALSENSE_MJPEG_HELPER}")
+
+    with _realsense_live_lock:
+        if restart:
+            _stop_realsense_live_process()
+            _release_realsense_owners()
+        proc = _realsense_live_proc
+        if proc is not None and proc.poll() is None:
+            return {"running": True, "reused": True, "pid": proc.pid}
+
+        REALSENSE_STREAM_LOG.write_text("Starting pyrealsense2 latest-frame helper...\n")
+        command = [
+            str(REALSENSE_PYTHON),
+            str(REALSENSE_MJPEG_HELPER),
+            "--latest-out",
+            str(REALSENSE_LIVE_JPEG),
+            "--intrinsics-out",
+            str(REALSENSE_LIVE_INTRINSICS),
+            "--quality",
+            "85",
+            "--max-fps",
+            "30",
+        ]
+        stderr_file = REALSENSE_STREAM_LOG.open("ab")
+        _realsense_live_proc = subprocess.Popen(
+            command,
+            stdout=subprocess.DEVNULL,
+            stderr=stderr_file,
+            bufsize=0,
+        )
+        proc = _realsense_live_proc
+
+    started = time.time()
+    while time.time() - started < 6.0:
+        if proc.poll() is not None:
+            log_text = REALSENSE_STREAM_LOG.read_text(errors="replace")[-4000:]
+            raise HTTPException(status_code=503, detail=f"RealSense latest-frame helper exited:\n{log_text}")
+        try:
+            if time.time() - REALSENSE_LIVE_JPEG.stat().st_mtime < 2.0:
+                return {"running": True, "reused": False, "pid": proc.pid}
+        except FileNotFoundError:
+            pass
+        time.sleep(0.1)
+
+    log_text = REALSENSE_STREAM_LOG.read_text(errors="replace")[-4000:] if REALSENSE_STREAM_LOG.exists() else ""
+    return {"running": proc.poll() is None, "reused": False, "pid": proc.pid, "warning": "No fresh frame yet", "log": log_text}
+
+
 @app.post("/api/localize-realsense-frame")
 async def localize_realsense_frame(payload: RealSenseLocalizeRequest) -> dict[str, Any]:
     if payload.scene != "stanford":
@@ -532,10 +603,35 @@ def realsense_stream_status() -> dict[str, Any]:
     }
 
 
+@app.post("/api/realsense/live/start")
+def realsense_live_start(restart: bool = True) -> dict[str, Any]:
+    return _start_realsense_live_process(restart=restart)
+
+
+@app.post("/api/realsense/live/stop")
+def realsense_live_stop() -> dict[str, Any]:
+    with _realsense_live_lock:
+        _stop_realsense_live_process()
+    return {"ok": True}
+
+
 @app.post("/api/realsense/release")
 def realsense_release() -> dict[str, Any]:
     logs = _release_realsense_owners()
     return {"ok": True, "logs": logs}
+
+
+@app.get("/api/realsense/latest.jpg")
+def realsense_latest_frame() -> Response:
+    capture = _read_live_realsense_image(max_age_seconds=5.0)
+    if capture is None:
+        raise HTTPException(status_code=404, detail="No fresh RealSense frame is available yet")
+    image_bytes, media_type, _, _ = capture
+    return Response(
+        content=image_bytes,
+        media_type=media_type,
+        headers={"Cache-Control": "no-store, max-age=0"},
+    )
 
 
 @app.get("/api/realsense/frame.jpg")

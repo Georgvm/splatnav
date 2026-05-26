@@ -202,9 +202,13 @@ canvas {
 }
 
 .camera-panel {
+  position: absolute;
+  left: 16px;
   right: 16px;
   top: 16px;
+  bottom: 16px;
   width: min(300px, calc(100% - 32px));
+  height: min(300px, calc(100% - 32px));
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 6px;
   overflow: hidden;
@@ -217,11 +221,19 @@ canvas {
 }
 
 .first-person.live-camera-mode .camera-panel {
-  inset: 0;
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
   width: auto;
+  height: auto;
   border: 0;
   border-radius: 0;
   background: #050707;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
   z-index: 1;
 }
 
@@ -235,22 +247,32 @@ canvas {
 }
 
 .camera-panel video,
-.camera-panel img {
+.camera-panel img,
+.camera-panel canvas {
+  position: relative;
   display: block;
   width: 100%;
+  height: 100%;
   aspect-ratio: 4 / 3;
   background: #050707;
   object-fit: cover;
 }
 
 .first-person.live-camera-mode .camera-panel video,
-.first-person.live-camera-mode .camera-panel img {
+.first-person.live-camera-mode .camera-panel img,
+.first-person.live-camera-mode .camera-panel canvas {
   height: 100%;
   aspect-ratio: auto;
   object-fit: contain;
 }
 
-.camera-panel img[hidden] {
+.first-person.live-camera-mode #realsenseStreamImage {
+  visibility: visible;
+}
+
+.camera-panel video[hidden],
+.camera-panel img[hidden],
+.camera-panel canvas[hidden] {
   display: none;
 }
 

@@ -544,7 +544,17 @@ function stopRealSenseLive(reason = "D435i live stream stopped.") {
   const oldUrl = realsenseStreamImage.src;
   realsenseStreamImage.removeAttribute("src");
   if (oldUrl.startsWith("blob:")) URL.revokeObjectURL(oldUrl);
+  cameraPanel.style.backgroundImage = "";
   realsenseStreamImage.hidden = true;
+  if (cameraCapture) {
+    const context = cameraCapture.getContext("2d");
+    if (context) {
+      context.clearRect(0, 0, cameraCapture.width, cameraCapture.height);
+    }
+    cameraCapture.width = 0;
+    cameraCapture.height = 0;
+    cameraCapture.hidden = true;
+  }
   cameraVideo.hidden = false;
   if (realsenseLiveButton) realsenseLiveButton.textContent = "D435i live";
   if (reason) setCameraStatus(reason, true);
@@ -557,6 +567,9 @@ function setLeftViewMode(mode) {
   cameraPanel.hidden = !showCamera;
   cameraVideo.hidden = true;
   realsenseStreamImage.hidden = !showCamera;
+  if (cameraCapture) {
+    cameraCapture.hidden = !(showCamera && realsenseLiveRunning);
+  }
 }
 
 async function startCamera() {
@@ -565,6 +578,7 @@ async function startCamera() {
   cameraPanel.hidden = false;
   cameraVideo.hidden = false;
   realsenseStreamImage.hidden = true;
+  if (cameraCapture) cameraCapture.hidden = true;
   if (!navigator.mediaDevices?.getUserMedia) {
     setCameraStatus("Browser camera capture is unavailable on this page.", true);
     return;
@@ -603,22 +617,36 @@ async function pollRealSenseLiveFrame() {
   try {
     const params = new URLSearchParams({
       t: String(Date.now()),
-      fast: "true",
-      release: "false",
     });
-    const response = await fetch(`/api/realsense/frame.jpg?${params.toString()}`);
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(text);
+    const frameUrl = `/api/realsense/latest.jpg?${params.toString()}`;
+    const probe = new Image();
+    await new Promise((resolve, reject) => {
+      probe.onload = resolve;
+      probe.onerror = () => reject(new Error("latest RealSense frame did not decode"));
+      probe.src = frameUrl;
+    });
+    realsenseStreamImage.setAttribute("src", frameUrl);
+    if (cameraCapture) {
+      const width = Math.max(1, Math.round(probe.naturalWidth || 640));
+      const height = Math.max(1, Math.round(probe.naturalHeight || 480));
+      cameraCapture.width = width;
+      cameraCapture.height = height;
+      const context = cameraCapture.getContext("2d");
+      if (context) {
+        context.clearRect(0, 0, width, height);
+        context.drawImage(probe, 0, 0, width, height);
+      }
+      cameraCapture.hidden = true;
+      realsenseStreamImage.hidden = false;
     }
-    const blob = await response.blob();
-    const oldUrl = realsenseStreamImage.src;
-    realsenseStreamImage.src = URL.createObjectURL(blob);
-    if (oldUrl.startsWith("blob:")) URL.revokeObjectURL(oldUrl);
-    setCameraStatus(`D435i live polling: loaded latest RGB frame in ${((performance.now() - started) / 1000).toFixed(2)}s.`, false);
+    cameraPanel.style.backgroundImage = `url("${frameUrl}")`;
+    cameraPanel.style.backgroundPosition = "center";
+    cameraPanel.style.backgroundRepeat = "no-repeat";
+    cameraPanel.style.backgroundSize = "contain";
+    setCameraStatus(`D435i live feed: loaded latest RGB frame in ${((performance.now() - started) / 1000).toFixed(2)}s.`, false);
   } catch (error) {
     failed = true;
-    setCameraStatus(`D435i live polling failed: ${error.message}`, true);
+    setCameraStatus(`D435i live feed failed: ${error.message}`, true);
   } finally {
     realsenseLiveFrameInFlight = false;
   }
@@ -644,18 +672,22 @@ function toggleRealSenseLive() {
   cameraPanel.hidden = false;
   cameraVideo.hidden = true;
   realsenseStreamImage.hidden = false;
+  if (cameraCapture) cameraCapture.hidden = true;
   realsenseLiveRunning = true;
   if (realsenseLiveButton) realsenseLiveButton.textContent = "Stop D435i";
-  setCameraStatus("Starting pyrealsense2 D435i MJPEG stream from the working RealSense venv...", true);
-  realsenseStreamImage.onerror = () => {
-    if (!realsenseLiveRunning) return;
-    stopRealSenseLive("D435i pyrealsense2 stream failed. Try Release camera on /camera-test, then start it again.");
-  };
-  realsenseStreamImage.onload = () => {
-    if (!realsenseLiveRunning) return;
-    setCameraStatus("D435i RGB stream running through pyrealsense2. Localize uses the newest cached frame.", false);
-  };
-  realsenseStreamImage.src = `/api/realsense/stream?t=${Date.now()}`;
+  setCameraStatus("Starting the working pyrealsense2 D435i feed...", true);
+  fetch("/api/realsense/live/start?restart=false", { method: "POST" })
+    .then(async (response) => {
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || "Could not start RealSense feed");
+      if (!realsenseLiveRunning) return;
+      setCameraStatus("D435i feed running through pyrealsense2. Showing latest frames.", true);
+      pollRealSenseLiveFrame();
+    })
+    .catch((error) => {
+      if (!realsenseLiveRunning) return;
+      stopRealSenseLive(`D435i feed failed: ${error.message}`);
+    });
 }
 
 function showSyntheticSource() {
