@@ -25,7 +25,9 @@
         <div class="camera-panel" id="cameraPanel" hidden>
           <video id="cameraVideo" autoplay muted playsinline></video>
           <img id="realsenseStreamImage" alt="Live D435i RGB stream" hidden />
+          <img id="uploadPreviewImage" alt="Uploaded image to localize" title="Click to choose another image" hidden />
           <canvas id="cameraCapture" hidden></canvas>
+          <input id="uploadInput" type="file" accept="image/*" hidden />
           <div id="cameraStatus">Camera idle</div>
         </div>
         <div class="status-strip">
@@ -69,6 +71,6 @@
       </figure>
     </section>
 
-    <script type="module" src="/app.js?v=latest_frame_canvas_fix_v2"></script>
+    <script type="module" src="/app.js?v=image_upload_source_v1"></script>
   </body>
 </html>

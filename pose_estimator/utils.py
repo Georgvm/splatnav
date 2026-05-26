@@ -624,7 +624,9 @@ def execute_PnP_RANSAC(
         )
 
         # coordinates in target image with shape (K, 2)
-        target_xy_matches = target_feats["keypoints"][matches[..., 1]].long()
+        target_xy_matches = (
+            target_feats["keypoints"][matches[..., 1]].long().cpu().numpy()
+        )
     else:
         source_xy, source_descriptors, source_kp_img = find_POI(
             source_img, 1000, viz=False, detector=feature_detector
@@ -656,16 +658,30 @@ def execute_PnP_RANSAC(
         source_xy_matches = np.stack(source_xy_matches, axis=0)
         target_xy_matches = np.stack(target_xy_matches, axis=0)
 
-    # apply depth mask
-    source_xy_matches[
-        depth_mask[source_xy_matches[:, 1], source_xy_matches[:, 0]].cpu().numpy()
-    ]
-    target_xy_matches[
-        depth_mask[target_xy_matches[:, 1], target_xy_matches[:, 0]].cpu().numpy()
-    ]
+    # Keep only correspondences whose rendered target pixel has valid depth.
+    target_xy_indices = torch.as_tensor(
+        target_xy_matches, dtype=torch.long, device=depth_mask.device
+    )
+    valid_depth = (
+        depth_mask[target_xy_indices[:, 1], target_xy_indices[:, 0]]
+        .detach()
+        .cpu()
+        .numpy()
+        .astype(bool)
+    )
+    source_xy_matches = source_xy_matches[valid_depth]
+    target_xy_matches = target_xy_matches[valid_depth]
+
+    if len(source_xy_matches) < 4:
+        raise RuntimeError(
+            f"Not enough valid-depth matches for PnP: {len(source_xy_matches)}"
+        )
 
     # Select matches from target point cloud
-    target_3d_matches = target_pcd[target_xy_matches[:, 1], target_xy_matches[:, 0]]
+    target_xy_indices = torch.as_tensor(
+        target_xy_matches, dtype=torch.long, device=target_pcd.device
+    )
+    target_3d_matches = target_pcd[target_xy_indices[:, 1], target_xy_indices[:, 0]]
     target_3d_matches = target_3d_matches.cpu().numpy()
 
     # Perform pnp ransac

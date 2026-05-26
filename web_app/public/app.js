@@ -19,6 +19,8 @@ const autoButton = document.querySelector("#autoButton");
 const cameraPanel = document.querySelector("#cameraPanel");
 const cameraVideo = document.querySelector("#cameraVideo");
 const realsenseStreamImage = document.querySelector("#realsenseStreamImage");
+const uploadPreviewImage = document.querySelector("#uploadPreviewImage");
+const uploadInput = document.querySelector("#uploadInput");
 const cameraCapture = document.querySelector("#cameraCapture");
 const cameraStatus = document.querySelector("#cameraStatus");
 const successMetric = document.querySelector("#successMetric");
@@ -79,6 +81,8 @@ let realsenseLiveFrameInFlight = false;
 let autoTimer = null;
 let realFrameInFlight = false;
 let realsenseInFlight = false;
+let uploadInFlight = false;
+let uploadedImage = null;
 let localizationEnabled = sceneName === "old_union" || sceneName === "stanford";
 let captureSource = "synthetic";
 let sourceType = "unknown";
@@ -423,7 +427,14 @@ function clearRunLogs() {
 }
 
 function updateSourceControls() {
-  sourceToggle.textContent = captureSource === "realsense" ? "3D scene" : "Live camera";
+  // The toggle cycles synthetic -> realsense -> upload -> synthetic.
+  // The label shows the source the next click will switch to.
+  const nextLabel = {
+    synthetic: "Live camera",
+    realsense: "Image upload",
+    upload: "3D scene",
+  };
+  sourceToggle.textContent = nextLabel[captureSource] || "Live camera";
   runButton.textContent = "Capture";
   runButton.disabled = !localizationEnabled;
 }
@@ -459,6 +470,13 @@ function setRealSenseRunning(running) {
   if (realsenseButton) realsenseButton.disabled = running || sceneName !== "stanford";
   if (realsenseButton) realsenseButton.textContent = running ? "Capturing..." : "D435i";
   if (realsenseLiveButton) realsenseLiveButton.disabled = running || sceneName !== "stanford";
+}
+
+function setUploadRunning(running) {
+  uploadInFlight = running;
+  runButton.disabled = running;
+  sourceToggle.disabled = running;
+  runButton.textContent = running ? "Capturing..." : "Capture";
 }
 
 function applyLocalizationResult(data, label) {
@@ -562,11 +580,14 @@ function stopRealSenseLive(reason = "D435i live stream stopped.") {
 
 function setLeftViewMode(mode) {
   const showCamera = mode === "camera";
-  firstPersonViewport.classList.toggle("live-camera-mode", showCamera);
-  fpCanvas.setAttribute("aria-hidden", showCamera ? "true" : "false");
-  cameraPanel.hidden = !showCamera;
+  const showUpload = mode === "upload";
+  const showPanel = showCamera || showUpload;
+  firstPersonViewport.classList.toggle("live-camera-mode", showPanel);
+  fpCanvas.setAttribute("aria-hidden", showPanel ? "true" : "false");
+  cameraPanel.hidden = !showPanel;
   cameraVideo.hidden = true;
   realsenseStreamImage.hidden = !showCamera;
+  uploadPreviewImage.hidden = !(showUpload && uploadedImage);
   if (cameraCapture) {
     cameraCapture.hidden = !(showCamera && realsenseLiveRunning);
   }
@@ -711,11 +732,104 @@ function showRealSenseSource() {
   setRunStatus("Left view set to live RealSense camera.", true);
 }
 
-function toggleCaptureSource() {
-  if (captureSource === "realsense") {
-    showSyntheticSource();
+function showImageUploadSource() {
+  if (sceneName !== "stanford") {
+    setRunStatus("Image-upload localization is currently wired for the Stanford splat.", true);
+    return;
+  }
+  stopBrowserCamera();
+  stopRealSenseLive();
+  captureSource = "upload";
+  updateSourceControls();
+  setLeftViewMode("upload");
+  if (uploadedImage) {
+    setRunStatus(`Left view set to uploaded image (${uploadedImage.name}). Press Capture to localize.`, true);
   } else {
+    setRunStatus("Left view set to image upload. Choose an image, then press Capture.", true);
+    openUploadPicker();
+  }
+}
+
+function toggleCaptureSource() {
+  if (captureSource === "synthetic") {
     showRealSenseSource();
+  } else if (captureSource === "realsense") {
+    showImageUploadSource();
+  } else {
+    showSyntheticSource();
+  }
+}
+
+function openUploadPicker() {
+  if (uploadInput) uploadInput.click();
+}
+
+function readFileAsDataURL(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error("Could not read the selected file"));
+    reader.readAsDataURL(file);
+  });
+}
+
+function loadImageElement(src) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("Could not decode the selected image"));
+    image.src = src;
+  });
+}
+
+async function handleUploadSelection(event) {
+  const file = event.target.files && event.target.files[0];
+  event.target.value = ""; // allow re-selecting the same file later
+  if (!file) return;
+  if (!file.type.startsWith("image/")) {
+    setCameraStatus("Please choose an image file.", true);
+    return;
+  }
+  try {
+    setCameraStatus(`Loading ${file.name}...`, true);
+    const dataUrl = await readFileAsDataURL(file);
+    const image = await loadImageElement(dataUrl);
+    const srcWidth = image.naturalWidth || image.width;
+    const srcHeight = image.naturalHeight || image.height;
+    const maxSide = 960;
+    const scale = Math.min(1, maxSide / Math.max(srcWidth, srcHeight));
+    const width = Math.max(2, Math.round(srcWidth * scale));
+    const height = Math.max(2, Math.round(srcHeight * scale));
+    cameraCapture.width = width;
+    cameraCapture.height = height;
+    const context = cameraCapture.getContext("2d", { willReadFrequently: false });
+    context.clearRect(0, 0, width, height);
+    context.drawImage(image, 0, 0, width, height);
+    const imageBase64 = cameraCapture.toDataURL("image/jpeg", 0.88);
+    cameraCapture.hidden = true;
+    const focal = Math.max(width, height) * 0.9;
+    uploadedImage = {
+      imageBase64,
+      name: file.name,
+      intrinsics: {
+        width,
+        height,
+        fx: focal,
+        fy: focal,
+        cx: width / 2,
+        cy: height / 2,
+      },
+    };
+    uploadPreviewImage.src = imageBase64;
+    if (captureSource === "upload") {
+      uploadPreviewImage.hidden = false;
+    }
+    setCameraStatus(
+      `Loaded ${file.name} (${srcWidth}x${srcHeight} -> ${width}x${height}). Press Capture to localize.`,
+      true
+    );
+  } catch (error) {
+    setCameraStatus(`Image upload failed: ${error.message}`, true);
   }
 }
 
@@ -844,6 +958,53 @@ async function runRealSenseLocalization({ debugImages = true } = {}) {
   }
 }
 
+async function runUploadLocalization({ debugImages = true } = {}) {
+  if (sceneName !== "stanford") {
+    setRunStatus("Image-upload localization is currently wired for the Stanford splat.", true);
+    return;
+  }
+  if (!uploadedImage) {
+    setRunStatus("Choose an image to upload first.", true);
+    openUploadPicker();
+    return;
+  }
+  if (uploadInFlight) return;
+  setUploadRunning(true);
+  clearRunLogs();
+  startStatusTimer();
+  successMetric.textContent = "-";
+  rotationMetric.textContent = "-";
+  translationMetric.textContent = "-";
+  runtimeMetric.textContent = "-";
+  try {
+    const { imageBase64, intrinsics } = uploadedImage;
+    const poseGuess = matrixWorldToRows(fpCamera);
+    setRunStatus(`Sending uploaded ${intrinsics.width}x${intrinsics.height} image to Modal...`, true);
+    const response = await fetch("/api/localize-frame", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        scene: sceneName,
+        image_base64: imageBase64,
+        pose_matrix: poseGuess,
+        intrinsics,
+        debug_images: debugImages,
+      }),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || "Image-upload localization request failed");
+    stopStatusTimer();
+    applyLocalizationResult(data, "Uploaded image");
+  } catch (error) {
+    stopStatusTimer();
+    setRunStatus(`Image-upload request failed: ${error.message}`, true);
+    successMetric.textContent = "error";
+  } finally {
+    stopStatusTimer();
+    setUploadRunning(false);
+  }
+}
+
 function toggleAutoRealFrame() {
   if (autoTimer !== null) {
     window.clearInterval(autoTimer);
@@ -936,6 +1097,8 @@ async function runLocalization() {
 async function runCapture() {
   if (captureSource === "realsense") {
     await runRealSenseLocalization({ debugImages: true });
+  } else if (captureSource === "upload") {
+    await runUploadLocalization({ debugImages: true });
   } else {
     await runLocalization();
   }
@@ -1051,6 +1214,8 @@ logToggle?.addEventListener("click", () => {
 });
 
 sourceToggle.addEventListener("click", toggleCaptureSource);
+uploadInput?.addEventListener("change", handleUploadSelection);
+uploadPreviewImage?.addEventListener("click", openUploadPicker);
 cameraButton?.addEventListener("click", startCamera);
 realFrameButton?.addEventListener("click", () => runRealFrameLocalization({ debugImages: true }));
 realsenseLiveButton?.addEventListener("click", toggleRealSenseLive);
