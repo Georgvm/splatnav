@@ -18,13 +18,9 @@
       <section class="viewport first-person">
         <canvas id="firstPersonScene"></canvas>
         <div class="top-bar">
-          <button id="runButton" class="primary-action" type="button">Localize</button>
-          <button id="cameraButton" type="button">Camera</button>
-          <button id="realFrameButton" type="button" disabled>Real frame</button>
-          <button id="realsenseLiveButton" type="button" disabled>D435i live</button>
-          <button id="realsenseButton" type="button" disabled>D435i</button>
-          <button id="autoButton" type="button" disabled>Auto 1 Hz</button>
-          <button id="logToggle" type="button">Logs</button>
+          <button id="sourceToggle" type="button">Source: 3D scene</button>
+          <button id="runButton" class="primary-action" type="button">Capture</button>
+          <button id="logToggle" type="button" hidden>Logs</button>
         </div>
         <div class="camera-panel" id="cameraPanel" hidden>
           <video id="cameraVideo" autoplay muted playsinline></video>

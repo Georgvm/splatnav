@@ -54,6 +54,12 @@ button {
   cursor: pointer;
 }
 
+.primary-action {
+  border-color: #8edbd1;
+  background: #8edbd1;
+  color: #0b1111;
+}
+
 select {
   min-height: 36px;
   max-width: min(460px, 100%);

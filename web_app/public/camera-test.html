@@ -11,13 +11,13 @@
       <header>
         <h1>RealSense Camera Test</h1>
         <div class="actions">
-          <select id="cameraSelect" aria-label="Camera device"></select>
-          <button id="browserButton" type="button">Browser camera</button>
-          <button id="releaseButton" type="button">Release camera</button>
-          <button id="backendLiveButton" type="button">Backend live</button>
-          <button id="backendButton" type="button">Backend frame</button>
-          <button id="streamStatusButton" type="button">Stream status</button>
-          <button id="refreshButton" type="button">Refresh status</button>
+          <select id="cameraSelect" aria-label="Camera device" hidden></select>
+          <button id="browserButton" type="button" hidden>Browser camera</button>
+          <button id="releaseButton" type="button" hidden>Release camera</button>
+          <button id="backendLiveButton" type="button">Camera: RealSense</button>
+          <button id="backendButton" class="primary-action" type="button">Capture</button>
+          <button id="streamStatusButton" type="button" hidden>Stream status</button>
+          <button id="refreshButton" type="button" hidden>Refresh status</button>
         </div>
       </header>
 

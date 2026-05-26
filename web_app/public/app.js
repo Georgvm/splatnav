@@ -9,6 +9,7 @@ const logToggle = document.querySelector("#logToggle");
 const logPanel = document.querySelector("#logPanel");
 const logOutput = document.querySelector("#logOutput");
 const runButton = document.querySelector("#runButton");
+const sourceToggle = document.querySelector("#sourceToggle");
 const cameraButton = document.querySelector("#cameraButton");
 const realFrameButton = document.querySelector("#realFrameButton");
 const realsenseLiveButton = document.querySelector("#realsenseLiveButton");
@@ -77,7 +78,8 @@ let realsenseLiveFrameInFlight = false;
 let autoTimer = null;
 let realFrameInFlight = false;
 let realsenseInFlight = false;
-let localizationEnabled = sceneName === "old_union";
+let localizationEnabled = sceneName === "old_union" || sceneName === "stanford";
+let captureSource = "synthetic";
 let sourceType = "unknown";
 
 function resizeRenderer(renderer, camera, canvas) {
@@ -396,8 +398,7 @@ function buildScene(data) {
   loadStatus.textContent = `${data.points.length.toLocaleString()} splat points loaded`;
   motionStatus.textContent = "Drag to look. Hold Shift+drag to move. Hold E+drag to orbit around a point ahead.";
   runButton.disabled = !localizationEnabled;
-  realsenseLiveButton.disabled = sceneName !== "stanford";
-  realsenseButton.disabled = sceneName !== "stanford";
+  updateSourceControls();
   runStatus.textContent = localizationEnabled
     ? "Ready to localize current pose"
     : sourceType === "gaussian_splat_ply"
@@ -420,9 +421,16 @@ function clearRunLogs() {
   logOutput.textContent = "";
 }
 
+function updateSourceControls() {
+  sourceToggle.textContent = captureSource === "realsense" ? "Source: RealSense" : "Source: 3D scene";
+  runButton.textContent = "Capture";
+  runButton.disabled = !localizationEnabled;
+}
+
 function setRunning(running) {
   runButton.disabled = running;
-  runButton.textContent = running ? "Localizing..." : "Localize";
+  sourceToggle.disabled = running;
+  runButton.textContent = running ? "Capturing..." : "Capture";
 }
 
 function setRunStatus(message, alsoLog = false) {
@@ -437,16 +445,19 @@ function setCameraStatus(message, alsoLog = false) {
 
 function setRealFrameRunning(running) {
   realFrameInFlight = running;
-  realFrameButton.disabled = running || !cameraStream || sceneName !== "stanford";
-  autoButton.disabled = running || !cameraStream || sceneName !== "stanford";
-  realFrameButton.textContent = running ? "Sending..." : "Real frame";
+  if (realFrameButton) realFrameButton.disabled = running || !cameraStream || sceneName !== "stanford";
+  if (autoButton) autoButton.disabled = running || !cameraStream || sceneName !== "stanford";
+  if (realFrameButton) realFrameButton.textContent = running ? "Sending..." : "Real frame";
 }
 
 function setRealSenseRunning(running) {
   realsenseInFlight = running;
-  realsenseButton.disabled = running || sceneName !== "stanford";
-  realsenseButton.textContent = running ? "Capturing..." : "D435i";
-  realsenseLiveButton.disabled = running || sceneName !== "stanford";
+  runButton.disabled = running;
+  sourceToggle.disabled = running;
+  runButton.textContent = running ? "Capturing..." : "Capture";
+  if (realsenseButton) realsenseButton.disabled = running || sceneName !== "stanford";
+  if (realsenseButton) realsenseButton.textContent = running ? "Capturing..." : "D435i";
+  if (realsenseLiveButton) realsenseLiveButton.disabled = running || sceneName !== "stanford";
 }
 
 function applyLocalizationResult(data, label) {
@@ -516,9 +527,9 @@ function stopBrowserCamera(reason = "") {
   for (const track of cameraStream.getTracks()) track.stop();
   cameraStream = null;
   cameraVideo.srcObject = null;
-  cameraButton.textContent = "Camera";
-  realFrameButton.disabled = true;
-  autoButton.disabled = true;
+  if (cameraButton) cameraButton.textContent = "Camera";
+  if (realFrameButton) realFrameButton.disabled = true;
+  if (autoButton) autoButton.disabled = true;
   if (reason) setCameraStatus(reason, true);
 }
 
@@ -534,7 +545,7 @@ function stopRealSenseLive(reason = "D435i live stream stopped.") {
   if (oldUrl.startsWith("blob:")) URL.revokeObjectURL(oldUrl);
   realsenseStreamImage.hidden = true;
   cameraVideo.hidden = false;
-  realsenseLiveButton.textContent = "D435i live";
+  if (realsenseLiveButton) realsenseLiveButton.textContent = "D435i live";
   if (reason) setCameraStatus(reason, true);
 }
 
@@ -559,9 +570,9 @@ async function startCamera() {
       audio: false,
     });
     cameraVideo.srcObject = cameraStream;
-    cameraButton.textContent = "Camera on";
-    realFrameButton.disabled = sceneName !== "stanford";
-    autoButton.disabled = sceneName !== "stanford";
+    if (cameraButton) cameraButton.textContent = "Camera on";
+    if (realFrameButton) realFrameButton.disabled = sceneName !== "stanford";
+    if (autoButton) autoButton.disabled = sceneName !== "stanford";
     const track = cameraStream.getVideoTracks()[0];
     const settings = track?.getSettings?.() ?? {};
     setCameraStatus(
@@ -624,7 +635,7 @@ function toggleRealSenseLive() {
   cameraVideo.hidden = true;
   realsenseStreamImage.hidden = false;
   realsenseLiveRunning = true;
-  realsenseLiveButton.textContent = "Stop D435i";
+  if (realsenseLiveButton) realsenseLiveButton.textContent = "Stop D435i";
   setCameraStatus("Starting pyrealsense2 D435i MJPEG stream from the working RealSense venv...", true);
   realsenseStreamImage.onerror = () => {
     if (!realsenseLiveRunning) return;
@@ -635,6 +646,34 @@ function toggleRealSenseLive() {
     setCameraStatus("D435i RGB stream running through pyrealsense2. Localize uses the newest cached frame.", false);
   };
   realsenseStreamImage.src = `/api/realsense/stream?t=${Date.now()}`;
+}
+
+function showSyntheticSource() {
+  stopBrowserCamera();
+  stopRealSenseLive();
+  cameraPanel.hidden = true;
+  captureSource = "synthetic";
+  updateSourceControls();
+  setRunStatus("Source set to 3D scene snapshot.", true);
+}
+
+function showRealSenseSource() {
+  if (sceneName !== "stanford") {
+    setRunStatus("RealSense relocalization is currently wired for the Stanford splat.", true);
+    return;
+  }
+  captureSource = "realsense";
+  updateSourceControls();
+  if (!realsenseLiveRunning) toggleRealSenseLive();
+  setRunStatus("Source set to RealSense camera.", true);
+}
+
+function toggleCaptureSource() {
+  if (captureSource === "realsense") {
+    showSyntheticSource();
+  } else {
+    showRealSenseSource();
+  }
 }
 
 function captureCameraFrame() {
@@ -766,11 +805,11 @@ function toggleAutoRealFrame() {
   if (autoTimer !== null) {
     window.clearInterval(autoTimer);
     autoTimer = null;
-    autoButton.textContent = "Auto 1 Hz";
+    if (autoButton) autoButton.textContent = "Auto 1 Hz";
     setCameraStatus("Auto relocalize stopped", true);
     return;
   }
-  autoButton.textContent = "Stop auto";
+  if (autoButton) autoButton.textContent = "Stop auto";
   setCameraStatus("Auto relocalize running at 1 Hz", true);
   runRealFrameLocalization({ debugImages: false });
   autoTimer = window.setInterval(() => {
@@ -851,6 +890,14 @@ async function runLocalization() {
   }
 }
 
+async function runCapture() {
+  if (captureSource === "realsense") {
+    await runRealSenseLocalization({ debugImages: true });
+  } else {
+    await runLocalization();
+  }
+}
+
 function animate() {
   const delta = Math.min(clock.getDelta(), 0.05);
   updateMotion(delta);
@@ -861,7 +908,7 @@ function animate() {
   requestAnimationFrame(animate);
 }
 
-runButton.addEventListener("click", runLocalization);
+runButton.addEventListener("click", runCapture);
 
 fpCanvas.addEventListener("pointerdown", (event) => {
   if (event.button !== 0) return;
@@ -946,7 +993,7 @@ overviewCanvas.addEventListener("wheel", (event) => {
 
 document.addEventListener("keydown", (event) => {
   keys.add(event.code);
-  if (event.code === "KeyL") runLocalization();
+  if (event.code === "KeyL") runCapture();
   if (event.code === "Backquote") {
     logPanel.hidden = !logPanel.hidden;
   }
@@ -956,15 +1003,16 @@ document.addEventListener("keyup", (event) => {
   keys.delete(event.code);
 });
 
-logToggle.addEventListener("click", () => {
+logToggle?.addEventListener("click", () => {
   logPanel.hidden = !logPanel.hidden;
 });
 
-cameraButton.addEventListener("click", startCamera);
-realFrameButton.addEventListener("click", () => runRealFrameLocalization({ debugImages: true }));
-realsenseLiveButton.addEventListener("click", toggleRealSenseLive);
-realsenseButton.addEventListener("click", () => runRealSenseLocalization({ debugImages: true }));
-autoButton.addEventListener("click", toggleAutoRealFrame);
+sourceToggle.addEventListener("click", toggleCaptureSource);
+cameraButton?.addEventListener("click", startCamera);
+realFrameButton?.addEventListener("click", () => runRealFrameLocalization({ debugImages: true }));
+realsenseLiveButton?.addEventListener("click", toggleRealSenseLive);
+realsenseButton?.addEventListener("click", () => runRealSenseLocalization({ debugImages: true }));
+autoButton?.addEventListener("click", toggleAutoRealFrame);
 
 fetch(`/api/scene/${encodeURIComponent(sceneName)}`)
   .then((response) => {

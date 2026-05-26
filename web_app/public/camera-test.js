@@ -91,7 +91,7 @@ function stopBackendLive(reason = "Backend live stream stopped.") {
   const oldUrl = backendImage.src;
   backendImage.removeAttribute("src");
   if (oldUrl.startsWith("blob:")) URL.revokeObjectURL(oldUrl);
-  backendLiveButton.textContent = "Backend live";
+  backendLiveButton.textContent = "Camera: RealSense";
   backendButton.disabled = false;
   backendStatus.textContent = reason;
 }
@@ -232,7 +232,7 @@ async function loadBackendFrame({ fast = false } = {}) {
   } finally {
     backendInFlight = false;
     backendButton.disabled = false;
-    backendButton.textContent = "Backend frame";
+    backendButton.textContent = "Capture";
   }
 }
 
@@ -256,7 +256,7 @@ function toggleBackendLive() {
   }
   stopBrowserStream("Stopped browser camera so the RealSense SDK can own the device.");
   backendLiveRunning = true;
-  backendLiveButton.textContent = "Stop live";
+  backendLiveButton.textContent = "Stop camera";
   backendButton.disabled = false;
   backendStatus.textContent = "Starting pyrealsense2 MJPEG stream from the working RealSense venv...";
   backendImage.onerror = () => {
