@@ -706,23 +706,23 @@ def execute_PnP_RANSAC(
     est_pose[:, 1] = -est_pose[:, 1]
     est_pose[:, 2] = -est_pose[:, 2]
 
-    if not success:
-        print(f"PNP RANSAC FAILED!")
-        raise RuntimeError(f"PNP RANSAC FAILED!")
-    else:
-        if print_stats:
-            print(f"PNP RANSAC SUCCEEDED!")
-
     if visualize_PnP_matches:
         fig = plt.figure()
         flann_matches = cv2.drawMatchesKnn(
             source_img, source_kp_img, target_img, target_kp_img, Matches, None
         )
         plt.imshow(flann_matches)
-        plt.show()
 
         # save figure
         fig.savefig(pnp_matches_figure_filename)
+        plt.close(fig)
+
+    if not success:
+        print(f"PNP RANSAC FAILED!")
+        raise RuntimeError(f"PNP RANSAC FAILED!")
+    else:
+        if print_stats:
+            print(f"PNP RANSAC SUCCEEDED!")
 
     return est_pose
 

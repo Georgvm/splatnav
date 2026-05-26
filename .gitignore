@@ -12,3 +12,6 @@ trajs
 __pycache__/
 *.pyc
 !*/logo.png
+build/
+modal_results/
+web_app/screenshots/

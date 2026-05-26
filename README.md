@@ -98,6 +98,25 @@ python run_splatloc.py
 ```
 to execute Splat-Loc on specified trained models and datasets. 
 
+### Modal H100 eval
+This checkout includes a Modal entrypoint for running a bounded Splat-Loc eval on an H100. First authenticate Modal locally:
+```
+pip install modal
+modal setup
+```
+
+Then run a short smoke test on the default `old_union` eval split:
+```
+modal run modal_app.py --download-data --scene old_union --max-frames 3
+```
+
+The first run downloads the Google Drive data/models linked above into the persistent Modal volume `splatnav-eval-data`. Later runs can skip the download:
+```
+modal run modal_app.py --scene old_union --max-frames 10
+```
+
+Results are written under `results/<scene>/test_runs/metrics.json` and `est_pose.json` inside the Modal container, and the metrics JSON is printed by the local entrypoint.
+
 ### Visualizing the paths
 Data visualization is done through viser (https://github.com/nerfstudio-project/viser). It is a web-based 3D interactive visualizer that supports meshes and Gaussian Splatting. Viser also supports programmatic view rendering, which was used to generate many of the visuals in our videos. To visualize the trajectories in viser, run
 ```

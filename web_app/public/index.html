@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SplatNav Old Union Live Demo</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://unpkg.com/three@0.165.0/build/three.module.js"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <main class="split-app">
+      <section class="viewport first-person">
+        <canvas id="firstPersonScene"></canvas>
+        <div class="top-bar">
+          <button id="runButton" class="primary-action" type="button">Localize</button>
+          <button id="cameraButton" type="button">Camera</button>
+          <button id="realFrameButton" type="button" disabled>Real frame</button>
+          <button id="realsenseLiveButton" type="button" disabled>D435i live</button>
+          <button id="realsenseButton" type="button" disabled>D435i</button>
+          <button id="autoButton" type="button" disabled>Auto 1 Hz</button>
+          <button id="logToggle" type="button">Logs</button>
+        </div>
+        <div class="camera-panel" id="cameraPanel" hidden>
+          <video id="cameraVideo" autoplay muted playsinline></video>
+          <img id="realsenseStreamImage" alt="Live D435i RGB stream" hidden />
+          <canvas id="cameraCapture" hidden></canvas>
+          <div id="cameraStatus">Camera idle</div>
+        </div>
+        <div class="status-strip">
+          <span id="loadStatus">Loading old_union preview...</span>
+          <span id="motionStatus">Ready</span>
+        </div>
+      </section>
+
+      <section class="viewport overview">
+        <canvas id="overviewScene"></canvas>
+        <div class="legend">
+          <span><i class="truth-dot"></i>Ground truth</span>
+          <span><i class="prediction-dot"></i>Prediction</span>
+        </div>
+        <section class="metrics">
+          <div><span>Success</span><strong id="successMetric">-</strong></div>
+          <div><span>Rotation</span><strong id="rotationMetric">-</strong></div>
+          <div><span>Translation</span><strong id="translationMetric">-</strong></div>
+          <div><span>Runtime</span><strong id="runtimeMetric">-</strong></div>
+        </section>
+        <div class="run-status" id="runStatus">Ready</div>
+        <section class="log-panel" id="logPanel" hidden>
+          <header>Modal logs</header>
+          <pre id="logOutput"></pre>
+        </section>
+      </section>
+    </main>
+
+    <section class="debug-strip">
+      <figure>
+        <figcaption>Snapshot</figcaption>
+        <img id="snapshotImage" alt="Current synthetic snapshot" />
+      </figure>
+      <figure>
+        <figcaption>Render + depth</figcaption>
+        <img id="renderImage" alt="PnP render and depth debug" />
+      </figure>
+      <figure>
+        <figcaption>Feature matches</figcaption>
+        <img id="matchesImage" alt="PnP feature matches" />
+      </figure>
+    </section>
+
+    <script type="module" src="/app.js?v=pyrealsense_mjpeg_debug"></script>
+  </body>
+</html>

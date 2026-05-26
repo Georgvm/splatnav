@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>RealSense Camera Test</title>
+    <link rel="stylesheet" href="/camera-test.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>RealSense Camera Test</h1>
+        <div class="actions">
+          <select id="cameraSelect" aria-label="Camera device"></select>
+          <button id="browserButton" type="button">Browser camera</button>
+          <button id="releaseButton" type="button">Release camera</button>
+          <button id="backendLiveButton" type="button">Backend live</button>
+          <button id="backendButton" type="button">Backend frame</button>
+          <button id="streamStatusButton" type="button">Stream status</button>
+          <button id="refreshButton" type="button">Refresh status</button>
+        </div>
+      </header>
+
+      <section class="viewer">
+        <div class="video-cell">
+          <video id="browserVideo" autoplay muted playsinline></video>
+          <canvas id="analysisCanvas" hidden></canvas>
+        </div>
+        <img id="backendImage" alt="RealSense backend frame" />
+      </section>
+
+      <section class="status">
+        <div class="status-grid">
+          <div>
+            <span>Browser camera</span>
+            <strong id="browserStatus">Checking browser devices...</strong>
+          </div>
+          <div>
+            <span>RealSense SDK</span>
+            <strong id="sdkStatus">Checking SDK...</strong>
+          </div>
+          <div>
+            <span>Backend frame</span>
+            <strong id="backendStatus">Idle</strong>
+          </div>
+        </div>
+        <pre id="details"></pre>
+      </section>
+    </main>
+
+    <script type="module" src="/camera-test.js?v=pyrealsense_mjpeg_debug"></script>
+  </body>
+</html>

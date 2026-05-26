@@ -1,0 +1,27 @@
+--extra-index-url https://download.pytorch.org/whl/cu118
+torch==2.1.2+cu118
+torchvision==0.16.2+cu118
+
+nerfstudio==1.1.5
+gsplat==1.4.0
+viser>=0.2.7
+
+clarabel
+cvxopt
+cvxpy
+dijkstra3d
+gdown
+imageio
+matplotlib
+numpy<2
+open3d==0.18.0
+opencv-python-headless
+polytope
+scipy
+sympy
+tqdm
+trimesh
+typing_extensions
+unfoldNd
+
+git+https://github.com/cvg/LightGlue.git
