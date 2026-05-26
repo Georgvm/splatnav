@@ -1116,6 +1116,15 @@ def interactive_stanford_real_frame_localize(
         error = None
         estimated_pose = est_pose.tolist()
         log("PnP succeeded for real RGB frame")
+        log("Rendering estimated pose for response debug image")
+        with torch.no_grad():
+            gsplat.generate_RGBD_point_cloud(
+                torch.tensor(est_pose, dtype=torch.float32, device=device),
+                save_image=debug_images,
+                filename=str(render_path),
+                compute_semantics=False,
+                return_pcd=False,
+            )
     except Exception as exc:
         success = False
         error = str(exc)
