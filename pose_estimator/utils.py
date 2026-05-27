@@ -685,25 +685,106 @@ def execute_PnP_RANSAC(
     target_3d_matches = target_3d_matches.cpu().numpy()
 
     # Perform pnp ransac
-    guess = init_guess.cpu().numpy()
+    guess_cv = init_guess.detach().clone()
+    guess_cv[:, 1] = -guess_cv[:, 1]
+    guess_cv[:, 2] = -guess_cv[:, 2]
+    guess = guess_cv.cpu().numpy()
     guess_w2c = np.linalg.inv(guess)
     t_guess = guess_w2c[:3, -1].reshape(-1, 1)
     r_guess = guess_w2c[:3, :3]
     R_vec_guess = cv2.Rodrigues(r_guess)[0]
+    camera_intrinsics_np = camera_intrinsics_K.cpu().numpy()
+
+    projected_xy, _ = cv2.projectPoints(
+        target_3d_matches,
+        R_vec_guess,
+        t_guess,
+        camera_intrinsics_np,
+        distCoeffs=None,
+    )
+    projected_xy = projected_xy.reshape(-1, 2)
+    prior_reprojection_error = np.linalg.norm(
+        projected_xy - source_xy_matches.astype(np.float32), axis=1
+    )
+    prior_gate_px = max(48.0, 0.075 * max(source_img.shape[:2]))
+    prior_mask = prior_reprojection_error < prior_gate_px
+    if prior_mask.sum() >= 6:
+        target_3d_matches = target_3d_matches[prior_mask]
+        source_xy_matches = source_xy_matches[prior_mask]
+        if print_stats:
+            print(
+                f"Kept {len(source_xy_matches)} matches within "
+                f"{prior_gate_px:.1f}px of the pose prior."
+            )
+    elif print_stats:
+        print(
+            f"Skipped pose-prior match gate; only {int(prior_mask.sum())} "
+            f"matches were within {prior_gate_px:.1f}px."
+        )
 
     # PnP-RANSAC
     success, R_vec, t, inliers = cv2.solvePnPRansac(
         target_3d_matches,
         source_xy_matches.astype(np.float32),
-        camera_intrinsics_K.cpu().numpy(),
+        camera_intrinsics_np,
         distCoeffs=None,
         rvec=R_vec_guess,
         tvec=t_guess,
-        flags=cv2.SOLVEPNP_EPNP,  # SOLVEPNP_ITERATIVE
+        useExtrinsicGuess=True,
+        flags=cv2.SOLVEPNP_EPNP,
         confidence=0.99,
         reprojectionError=8.0,
-        # useExtrinsicGuess=True
     )
+
+    if success and inliers is not None and len(inliers) >= 4:
+        inlier_idx = inliers.reshape(-1)
+        if print_stats:
+            print(f"PnP RANSAC kept {len(inlier_idx)} inliers.")
+        success_refine, R_vec_refined, t_refined = cv2.solvePnP(
+            target_3d_matches[inlier_idx],
+            source_xy_matches[inlier_idx].astype(np.float32),
+            camera_intrinsics_np,
+            distCoeffs=None,
+            rvec=R_vec,
+            tvec=t,
+            useExtrinsicGuess=True,
+            flags=cv2.SOLVEPNP_ITERATIVE,
+        )
+        if success_refine:
+            R_vec, t = R_vec_refined, t_refined
+    elif not success and len(source_xy_matches) >= 4:
+        fallback_success, R_vec_fallback, t_fallback = cv2.solvePnP(
+            target_3d_matches,
+            source_xy_matches.astype(np.float32),
+            camera_intrinsics_np,
+            distCoeffs=None,
+            rvec=R_vec_guess,
+            tvec=t_guess,
+            useExtrinsicGuess=True,
+            flags=cv2.SOLVEPNP_ITERATIVE,
+        )
+        if fallback_success:
+            fallback_projected_xy, _ = cv2.projectPoints(
+                target_3d_matches,
+                R_vec_fallback,
+                t_fallback,
+                camera_intrinsics_np,
+                distCoeffs=None,
+            )
+            fallback_projected_xy = fallback_projected_xy.reshape(-1, 2)
+            fallback_errors = np.linalg.norm(
+                fallback_projected_xy - source_xy_matches.astype(np.float32), axis=1
+            )
+            fallback_rms = float(np.sqrt(np.mean(fallback_errors**2)))
+            fallback_median = float(np.median(fallback_errors))
+            if print_stats:
+                print(
+                    "Fallback iterative PnP reprojection error: "
+                    f"rms={fallback_rms:.2f}px median={fallback_median:.2f}px."
+                )
+            if fallback_rms <= 60.0 and fallback_median <= 36.0:
+                success = True
+                R_vec, t = R_vec_fallback, t_fallback
 
     t1 = time.perf_counter()
 

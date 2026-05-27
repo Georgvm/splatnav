@@ -1004,6 +1004,7 @@ def interactive_stanford_raw_localize(
     image=image,
     gpu="H100",
     timeout=60 * 30,
+    scaledown_window=60 * 60,
     volumes={str(VOL_DIR): volume},
 )
 def interactive_stanford_real_frame_localize(
@@ -1093,6 +1094,8 @@ def interactive_stanford_real_frame_localize(
     snapshot_path = result_dir / "realsense_frame.png"
     render_path = result_dir / "render_and_depth.png"
     matches_path = result_dir / "matches.png"
+    for debug_path in (snapshot_path, render_path, matches_path):
+        debug_path.unlink(missing_ok=True)
     if debug_images:
         plt.imsave(snapshot_path, rgb_np)
         log(f"Wrote real-frame debug image to {snapshot_path}")
@@ -1106,10 +1109,10 @@ def interactive_stanford_real_frame_localize(
             camera_intrinsics_K=camera_intrinsics,
             rgb_input=rgb_input,
             feature_detector=POI_Detector.SIFT,
-            save_image=debug_images,
+            save_image=False,
             pnp_figure_filename=str(render_path),
             print_stats=True,
-            visualize_PnP_matches=debug_images,
+            visualize_PnP_matches=False,
             pnp_matches_figure_filename=str(matches_path),
         )
         success = True
